@@ -12,7 +12,7 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "+123.697"			@ first value (string)
+		.asciz "-1313.3125"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
 		.asciz "-543.631" 			@ second value (string)
@@ -74,6 +74,13 @@ endWhole:
 	ldmia sp!, {R3, R4, R5, R6, lr}	@ pop the registers we used
 	bx lr 	@ return
 
+splitIEE754:
+	stmdb sp!, {R3, R4, lr} @store registers
+	ldr R3, [R1]	@load answer into R3
+	ldr R4, [R0] 	@load value of input
+	ldmia sp!, {R3, R4, lr}	@ pops registers from stack
+	bx lr 
+
 getIEEE754:
 	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, lr} @ stores registers on stack
 	
@@ -108,8 +115,8 @@ getIEEE754:
 		mov R3, R3, LSL R8	@ shifts the answer by the exponent plus one bits
 		add R3, R3, R2		@ adds the whole number part to end of the exponent
 		sub R8, R8, #1		@ restores the original exponent
-		rsb R8, R8, #23     @ finds how much space we have for the decimal
-		
+		rsb R8, R8, #23     	@ finds how much space we have for the decimal
+
 		mov R4, #1			@ our iterator
 		mov R6, #0			@ count for how many base 10 digits our number is
 		mov R7, #10			@ stays as 10 to multiply R4 by 10 each iteration
@@ -137,11 +144,11 @@ getIEEE754:
 		digitCountBin:
 			cmp R2, R4			@ is our number greater than 2^R4?
 			mulgt R5, R4, R7	@ if so, multiply by 2
-			addgt R6, R6, #1    @ also, add one to the count
+			addgt R6, R6, #1    	@ also, add one to the count
 			movgt R4, R5		@ moves the product back into R4 for looping
 			bgt digitCountBin	@ loops back
 
-		cmp R6, R8				@ do we have room for our decimal result?
+		cmp R6, R8			@ do we have room for our decimal result?
 		ble placeAndShift		@ if so, place it and shift over the rest
 		bgt shiftAndPlace 		@ if not, truncate the number and place it
 
@@ -158,6 +165,8 @@ getIEEE754:
 		str R3, [R1]	@ stores the IEEE 754 number into memory
 		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, lr}	@ pops registers from stack
 		bx lr 			@ return
+
+
 
 @ MAIN
 _start:
@@ -191,12 +200,21 @@ _start:
 	ldr R0, =value1Result	@ loads the parsed version of value 1 into R0
 	ldr R1, =value1IEEE754	@ loads the answer pointer into R1
 	bl getIEEE754			@ does the IEEE 754 conversion
-	
-	@ converts value 2 into IEEE 754
-	ldr R0, =value2Result	@ loads the parsed version of value 2 into R0
+
+	@ converts value 1 into IEEE 754
+	ldr R0, =value2Result	@ loads the parsed version of value21 into R0
 	ldr R1, =value2IEEE754	@ loads the answer pointer into R1
 	bl getIEEE754			@ does the IEEE 754 conversion
 
+	@split value up into different words
+	ldr R0, =value1IEEE754	@ loads IEE754 version
+	ldr R1, =value1IEESplit @load result
+	bl splitIEE754
+
+	@split value up into different words
+	ldr R0, =value2IEEE754	@ loads IEE754 version
+	ldr R1, =value2IEESplit @load result
+	bl splitIEE754
 END:
 	swi SWI_Exit	@ exit program
 
@@ -205,5 +223,6 @@ END:
 	value2Result: .word 0, 0, 0	@ holds a parsed version of the second value
 	value1IEEE754: .word 0		@ holds value 1 in IEEE 754 form
 	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
-
+	value1IEESplit: .word 0, 0, 0   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
+	value2IEESplit: .word 0, 0, 0	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
 .end
