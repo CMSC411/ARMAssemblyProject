@@ -145,7 +145,7 @@ getIEEE754:
 		ble placeAndShift		@ if so, place it and shift over the rest
 		bgt shiftAndPlace 		@ if not, truncate the number and place it
 
-		@ NOTE: DOES NOT WOKR YET
+		@ NOTE: DOES NOT WORK YET
 		placeAndShift:
 			mov R3, R3, LSL R6	
 			add R3, R3, R2
