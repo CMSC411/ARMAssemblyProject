@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "-1313.3125"			@ first value (string)
+		.asciz "-12.0"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "-543.631" 			@ second value (string)
+		.asciz "-39887.5625" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -75,11 +75,21 @@ endWhole:
 	bx lr 	@ return
 
 splitIEE754:
-	stmdb sp!, {R3, R4, lr} @store registers
+	stmdb sp!, {R3, R4, R5, lr} @store registers
 	ldr R3, [R1]	@load answer into R3
 	ldr R4, [R0] 	@load value of input
-	ldmia sp!, {R3, R4, lr}	@ pops registers from stack
-	bx lr 
+	mov R5, R4, LSR #31	@ get sign
+	str R5, [R1, #0]	@store sign
+	mov R4, R4, LSL #1	@get everything but sign
+	mov R4, R4, LSR #1	@shift back right
+	mov R5, R4, LSR #23	@get exponent
+ 	str R5, [R1, #4]	@store exponent
+ 	mov R4, R4, LSL #9	@delete exponent
+ 	mov R4, R4, LSR #9	@remaining value is mantissa
+ 	str R4, [R1, #8]	@store exponent
+	ldmia sp!, {R3, R4, R5, lr}	@ pop the registers we used
+	bx lr 	@ return
+
 
 getIEEE754:
 	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, lr} @ stores registers on stack
