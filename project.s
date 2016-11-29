@@ -90,6 +90,200 @@ splitIEE754:
 	ldmia sp!, {R3, R4, R5, lr}	@ pop the registers we used
 	bx lr 	@ return
 
+add_:
+	stmdb sp!, {R3, R4, R5, R6, R7, R8, R9 lr} @store registers
+	
+	ldr R3, [R0]
+	ldr R4, [R1]
+	
+	cmp R3, R4
+	beq same_sign
+	b diff_sign
+
+	same_sign:
+		str R3, [R2]
+		mov R7, #4
+		ldr R3, [R0, R7]
+		ldr R4, [R1, R7]
+	
+		mov R7, #8
+		ldr R5, [R0, R7]
+		ldr R6, [R1, R7]
+
+		mov R7, #1
+		mov R7, R7, LSL #31
+
+		mov R5, R5, LSL #8	
+		add R5, R5, R7
+		mov R6, R6, LSL #8	
+		add R6, R6, R7
+
+		mov R5, R5, LSR #1
+		mov R6, R6, LSR #1
+
+		cmp R4, R3
+		beq mant_add
+
+		cmp R3, R4
+		bhi shift_mant
+
+		mov R7, R3
+		mov R3, R4
+		mov R4, R7
+		mov R7, R5
+		mov R5, R6
+		mov R6, R7
+
+		shift_mant:
+			sub R7, R3, R4
+			mov R6, R6, LSR R7
+
+		mant_add:
+			add R7, R5, R6
+			mov R8, R7
+			mov R8, R8, LSR #31
+			mov R9, #1
+			cmp R8, R9
+			bne end_add
+
+			add R3, R3, #1
+			mov R7, R7, LSR #1
+
+		end_add:
+			str R3, [R2, #4]
+			mov R7, R7, LSL #2
+			mov R7, R7, LSR #9
+			str R7, [R2, #8]
+			ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
+			bx lr 	@ return
+
+	diff_sign:
+		cmp R3, #1
+		beq first_neg
+		b second_neg
+
+		first_neg:
+			mov R9, #4
+			ldr R5, [R0, R9]
+			ldr R6, [R1, R9]
+
+			mov R9, #8
+			ldr R7, [R0, R9]
+			ldr R8, [R1, R9]
+
+			cmp R5, R6
+			beq check_mant
+			
+			cmp R5, R6
+			bhi	neg_result
+			b pos_result
+
+			check_mant:
+				cmp R7, R8
+				bls pos_result
+				b neg_result
+
+			neg_result: 
+				str R3, [R2]
+				b continue
+
+			pos_result:
+				str R4, [R2]
+
+			continue:
+				mov R7, #4
+				ldr R3, [R0, R7]
+				ldr R4, [R1, R7]
+	
+				mov R7, #8
+				ldr R5, [R0, R7]
+				ldr R6, [R1, R7]
+
+				mov R7, #1
+				mov R7, R7, LSL #31
+
+				mov R5, R5, LSL #8	
+				add R5, R5, R7
+				mov R6, R6, LSL #8	
+				add R6, R6, R7
+
+				cmp R4, R3
+				beq mant_sub
+
+				cmp R4, R3
+				bhi second_exp_larger
+				b first_exp_larger
+				sub R7, R3, R4
+				mov R6, R6, LSR R7
+				
+				b mant_sub
+				first_exp_larger:
+					sub R7, R3, R4
+					mov R6, R6, LSR R7
+					b mant_sub_f
+				second_exp_larger:
+					sub R7, R4, R3
+					mov R5, R5, LSR R7
+					b mant_sub_s
+
+				mant_sub_f:
+					sub R7, R5, R6
+					mov R6, #31
+					mov R8, R7
+					mov R8, R8, LSR R6
+					mov R9, #0
+					cmp R8, R9
+					bne end_sub_f
+					b new_exp_f
+					
+				mant_sub_s:
+					sub R7, R5, R6
+					mov R6, #31
+					mov R8, R7
+					mov R8, R8, LSR R6
+					mov R5, #0
+					mov R9, #0
+					cmp R8, R9
+					bne end_sub_s
+					b new_exp_s
+					
+				end_sub_f:
+					sub R3, R3, R5
+					str R3, [R2, #4]
+					add R5, R5, #1
+					mov R7, R7, LSL R5
+					mov R7, R7, LSR #9
+					str R7, [R2, #8]
+					ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
+					bx lr 	@ return
+
+				end_sub_s:
+					sub R4, R4, R5
+					str R4, [R2, #4]
+					add R5, R5, #1
+					mov R7, R7, LSL R5
+					mov R7, R7, LSR #9
+					str R7, [R2, #8]
+					ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
+					bx lr 	@ return
+				
+				new_exp_f:
+					sub R6, R6, #1
+					mov R8, R7
+					mov R8, R8, LSR R6
+					add R5, R5, #1
+					cmp R8, R9
+					bne end_sub_f
+					b new_exp_f
+
+				new_exp_s:
+					sub R6, R6, #1
+					mov R8, R7
+					mov R8, R8, LSR R6
+					add R5, R5, #1
+					cmp R8, R9
+					bne end_sub_s
+					b new_exp_s
 
 getIEEE754:
 	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, lr} @ stores registers on stack
@@ -177,6 +371,8 @@ getIEEE754:
 		bx lr 			@ return
 
 
+	
+
 
 @ MAIN
 _start:
@@ -225,6 +421,11 @@ _start:
 	ldr R0, =value2IEEE754	@ loads IEE754 version
 	ldr R1, =value2IEESplit @load result
 	bl splitIEE754
+
+	@add value1 and value 2
+	ldr R0, =value1IEESplit
+	ldr R1, =value2IEESplit
+	bl add_
 END:
 	swi SWI_Exit	@ exit program
 
@@ -235,4 +436,5 @@ END:
 	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
 	value1IEESplit: .word 0, 0, 0   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
 	value2IEESplit: .word 0, 0, 0	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
+	sum1:			.word 0, 0, 0
 .end
