@@ -15,7 +15,7 @@
 		.asciz "-12.0"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "-39887.5625" 			@ second value (string)
+		.asciz "-25123.5625" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -93,105 +93,134 @@ splitIEE754:
 add_:
 	stmdb sp!, {R3, R4, R5, R6, R7, R8, R9 lr} @store registers
 	
-	ldr R3, [R0]
-	ldr R4, [R1]
+	ldr R3, [R0] @get sign of first value
+	ldr R4, [R1] @get sign of second value
 	
-	cmp R3, R4
-	beq same_sign
-	b diff_sign
+	cmp R3, R4 
+	beq same_sign @jump to same_sign if equal
+	b diff_sign   @jump to diff if diff
 
 	same_sign:
-		str R3, [R2]
-		mov R7, #4
-		ldr R3, [R0, R7]
+		str R3, [R2] @store new sign (same)
+		mov R7, #4   @offset for getting exp
+		ldr R3, [R0, R7] @get exp for both values
 		ldr R4, [R1, R7]
 	
-		mov R7, #8
+		mov R7, #8			@get mantissa for both values
 		ldr R5, [R0, R7]
 		ldr R6, [R1, R7]
 
-		mov R7, #1
+		mov R7, #1			@R7 used here to add 'assumed' 1 back to mantissa
 		mov R7, R7, LSL #31
 
-		mov R5, R5, LSL #8	
-		add R5, R5, R7
+		mov R5, R5, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
+		add R5, R5, R7		@add assumed 1
 		mov R6, R6, LSL #8	
 		add R6, R6, R7
 
-		mov R5, R5, LSR #1
+		mov R5, R5, LSR #1 @shift right 1 to leave a space for carry
 		mov R6, R6, LSR #1
 
-		cmp R4, R3
+		cmp R4, R3		@jump to add if exp are equal
 		beq mant_add
 
-		cmp R3, R4
+		cmp R3, R4		@jump to shift_mant if first exponent larger than second
 		bhi shift_mant
 
-		mov R7, R3
+		mov R7, R3		@if second exponent larger, flip around exp and mantissa in registers
 		mov R3, R4
 		mov R4, R7
 		mov R7, R5
 		mov R5, R6
 		mov R6, R7
 
-		shift_mant:
+		shift_mant:				@calculate difference in exponent, then shift mantissa accordingly
 			sub R7, R3, R4
 			mov R6, R6, LSR R7
 
-		mant_add:
+		mant_add:					@add both mantissas
 			add R7, R5, R6
-			mov R8, R7
+			mov R8, R7				@R8 contains leftmost bit of result
 			mov R8, R8, LSR #31
 			mov R9, #1
-			cmp R8, R9
+			cmp R8, R9				@if leftmost bit of result is 0, no overflow so end
 			bne end_add
 
-			add R3, R3, #1
+			add R3, R3, #1			@leftmost bit is 1, so add 1 to exponent and shift mantissa 1
 			mov R7, R7, LSR #1
 
-		end_add:
+		end_add:					@store the exponent
 			str R3, [R2, #4]
-			mov R7, R7, LSL #2
-			mov R7, R7, LSR #9
-			str R7, [R2, #8]
+			mov R7, R7, LSL #2		@shift left 2 to get rid of 'assumed' 1
+			mov R7, R7, LSR #9		@shift right 9 to get back to desired form
+			str R7, [R2, #8]		@store mantissa
 			ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
 			bx lr 	@ return
 
-	diff_sign:
-		cmp R3, #1
-		beq first_neg
-		b second_neg
+	diff_sign:					@if signs are different (subtract)
+		cmp R3, #1				
+		beq first_neg			@if first value is negative
+		b second_neg			@if second value is negative
 
-		first_neg:
+		first_neg:				@first value is negative
 			mov R9, #4
-			ldr R5, [R0, R9]
+			ldr R5, [R0, R9]	@load in exponents
 			ldr R6, [R1, R9]
 
-			mov R9, #8
+			mov R9, #8			@load in mantissas
 			ldr R7, [R0, R9]
 			ldr R8, [R1, R9]
 
-			cmp R5, R6
-			beq check_mant
+			cmp R5, R6					@compare exponents
+			beq check_mant_first		@if exponents equal, check mantissas
 			
-			cmp R5, R6
-			bhi	neg_result
-			b pos_result
+			cmp R5, R6					@compare exponents
+			bhi	neg_result_first		@if exponent of negative value is higher
+			b pos_result_first
 
-			check_mant:
+			check_mant_first:			@compare mantissas
 				cmp R7, R8
-				bls pos_result
-				b neg_result
+				bls pos_result_first	@if positive mantissa is higher or equal
+				b neg_result_first		@if negative mantissa is higher
 
-			neg_result: 
-				str R3, [R2]
+			neg_result_first: 
+				str R3, [R2]			@store negative
 				b continue
 
-			pos_result:
-				str R4, [R2]
+			pos_result_first:
+				str R4, [R2]			@store positive
+				b continue
+
+		second_neg:				@second value is negative
+			mov R9, #4
+			ldr R5, [R0, R9]	@load in exponents
+			ldr R6, [R1, R9]
+
+			mov R9, #8			@load in mantissas
+			ldr R7, [R0, R9]
+			ldr R8, [R1, R9]
+
+			cmp R5, R6					@compare exponents
+			beq check_mant_second		@if exponents equal, check mantissas
+			
+			cmp R5, R6					@compare exponents
+			bhi	pos_result_second		@if exponent of positive value is higher
+			b neg_result_second
+
+			check_mant_second:			@compare mantissas
+				cmp R8, R7
+				bls pos_result_second	@if positive value is higher or equal
+				b neg_result_second		@if negative value is higher
+
+			neg_result_second: 
+				str R4, [R2]			@store negative
+				b continue
+
+			pos_result_second:
+				str R3, [R2]			@store positive
 
 			continue:
-				mov R7, #4
+				mov R7, #4				@reload exponents and mantissas into different registers
 				ldr R3, [R0, R7]
 				ldr R4, [R1, R7]
 	
@@ -200,43 +229,41 @@ add_:
 				ldr R6, [R1, R7]
 
 				mov R7, #1
-				mov R7, R7, LSL #31
+				mov R7, R7, LSL #31		@set up value to add back in 'assumed' 1
 
-				mov R5, R5, LSL #8	
+				mov R5, R5, LSL #8		@add back in assumed 1
 				add R5, R5, R7
 				mov R6, R6, LSL #8	
 				add R6, R6, R7
 
-				cmp R4, R3
+				cmp R4, R3				@if exponents are equal
 				beq mant_sub
 
-				cmp R4, R3
+				cmp R4, R3				@if second exponent is larger
 				bhi second_exp_larger
-				b first_exp_larger
-				sub R7, R3, R4
-				mov R6, R6, LSR R7
+				b first_exp_larger		@if first exponent is larger
 				
-				b mant_sub
 				first_exp_larger:
-					sub R7, R3, R4
+					sub R7, R3, R4		@calculate shift
 					mov R6, R6, LSR R7
-					b mant_sub_f
+					b mant_sub_f		@jump to mantissa for first exp larger
 				second_exp_larger:
-					sub R7, R4, R3
+					sub R7, R4, R3		@calculate shift
 					mov R5, R5, LSR R7
-					b mant_sub_s
+					b mant_sub_s		@jump to mantissa for second exp larger
 
-				mant_sub_f:
+				mant_sub_f:				@subtract mantissas for first exp larger
 					sub R7, R5, R6
-					mov R6, #31
-					mov R8, R7
-					mov R8, R8, LSR R6
-					mov R9, #0
-					cmp R8, R9
-					bne end_sub_f
-					b new_exp_f
+					mov R6, #31			@R6 = amount to shift to get leftmost bit
+					mov R8, R7			@put result in R8
+					mov R8, R8, LSR R6	@shift R8 right by R6
+					mov R5, #0			@number to add to exp
+					mov R9, #0			
+					cmp R8, R9			@check if R8 is 0
+					bne end_sub_f		@if 1 is found, jump to end
+					b new_exp_f			@if still 0, jump to new_exp
 					
-				mant_sub_s:
+				mant_sub_s:				@same as above bot second exp larger
 					sub R7, R5, R6
 					mov R6, #31
 					mov R8, R7
@@ -247,17 +274,17 @@ add_:
 					bne end_sub_s
 					b new_exp_s
 					
-				end_sub_f:
-					sub R3, R3, R5
-					str R3, [R2, #4]
-					add R5, R5, #1
-					mov R7, R7, LSL R5
-					mov R7, R7, LSR #9
-					str R7, [R2, #8]
+				end_sub_f:				@end for first exp larger
+					sub R3, R3, R5		@reduce exponent
+					str R3, [R2, #4]	@store exponent
+					add R5, R5, #1		
+					mov R7, R7, LSL R5	@shift mantissa left to get normalized
+					mov R7, R7, LSR #9	@shift right to put back in desired form
+					str R7, [R2, #8]	@store mantissa
 					ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
 					bx lr 	@ return
 
-				end_sub_s:
+				end_sub_s:				@same as above for second exp larger
 					sub R4, R4, R5
 					str R4, [R2, #4]
 					add R5, R5, #1
@@ -267,31 +294,43 @@ add_:
 					ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
 					bx lr 	@ return
 				
-				new_exp_f:
-					sub R6, R6, #1
-					mov R8, R7
-					mov R8, R8, LSR R6
-					add R5, R5, #1
-					cmp R8, R9
-					bne end_sub_f
-					b new_exp_f
+				end_zero:				@result was 0
+					str R6, [R2]
+					str R6, [R2, #4]
+					str R6, [R2, #8]
+					ldmia sp!, {R3, R4, R5, R6, R7, R8, R9 lr}	@ pop the registers we used
+					bx lr 	@ return
 
-				new_exp_s:
-					sub R6, R6, #1
-					mov R8, R7
-					mov R8, R8, LSR R6
-					add R5, R5, #1
+				new_exp_f:				@first exp larger, keep shifting until 1 is found
+					sub R6, R6, #1		@R6 = amount to shift to get leftmost bit
+					mov R8, R7			@put result in R8
+					mov R8, R8, LSR R6  @shift R8 right by R6
+					add R5, R5, #1		@number to add to exp
+					cmp R8, R9			
+					bne end_sub_f		@if 1 is found go to end
+					cmp R6, #0			@if mantissa is 0, go to end for 0
+					beq end_zero
+					b new_exp_f			@if R6 not 0 keep looping
+
+
+
+				new_exp_s:				@second exp larger, keep shifting until 1 is found
+					sub R6, R6, #1		@R6 = amount to shift to get leftmost bit
+					mov R8, R7			@put result in R8
+					mov R8, R8, LSR R6	@shift R8 right by R6
+					add R5, R5, #1		@number to add to exp
 					cmp R8, R9
-					bne end_sub_s
-					b new_exp_s
+					bne end_sub_s		@if 1 is found go to end
+					cmp R6, #0			@if mantissa is 0, go to end for 0
+					beq end_zero
+					b new_exp_s			@if R6 not 0 keep looping
 
 getIEEE754:
-	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, lr} @ stores registers on stack
+	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr} @ stores registers on stack
 	
 	ldr R4, [R1]		@ loads the answer's value into R4
 	ldr R2, [R0, #0]	@ loads the sign bit into R2
-	cmp R2, #1			@ do we have a negative number?
-	addeq R3, R4, #1	@ if so, make the first bit of the answer 1
+	str R2, [R9, #0]	@store sign bit in result bit
 
 	ldr R2, [R0, #4]	@ loads the whole number part into R2
 	cmp R2, #0			@ is our whole number part 0?
@@ -310,12 +349,12 @@ getIEEE754:
 		b findExponent		@ loops back
 
 	exponentInBin:
-		mov R3, R3, LSL #8	@ shifts the answer's bit 8 positions to the left
 		add R8, R8, #127	@ adds 127 to the exponent
-		add R3, R3, R8		@ adds the exponent onto the end of the sign bit
+		str R8, [R9, #4]
 
 	mantissaInBin:
 		sub R8, R8, #126	@ restores the original exponent plus one
+		mov R3, R2			@prep whole number
 		mov R3, R3, LSL R8	@ shifts the answer by the exponent plus one bits
 		add R3, R3, R2		@ adds the whole number part to end of the exponent
 		sub R8, R8, #1		@ restores the original exponent
@@ -358,8 +397,9 @@ getIEEE754:
 
 		@ NOTE: DOES NOT WORK YET
 		placeAndShift:
-			mov R3, R3, LSL R6	
+			mov R3, R3, LSL R6
 			add R3, R3, R2
+			str R3, [R9, #8]
 			sub R8, R8, R6
 			@mov R3, R3, LSL R8
 
@@ -367,7 +407,7 @@ getIEEE754:
 
 	finishIEEE754:
 		str R3, [R1]	@ stores the IEEE 754 number into memory
-		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, lr}	@ pops registers from stack
+		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
 
 
@@ -405,13 +445,16 @@ _start:
 	@ converts value 1 into IEEE 754
 	ldr R0, =value1Result	@ loads the parsed version of value 1 into R0
 	ldr R1, =value1IEEE754	@ loads the answer pointer into R1
+	ldr R9, =value1IEESplit @load result
+
 	bl getIEEE754			@ does the IEEE 754 conversion
 
 	@ converts value 1 into IEEE 754
 	ldr R0, =value2Result	@ loads the parsed version of value21 into R0
 	ldr R1, =value2IEEE754	@ loads the answer pointer into R1
-	bl getIEEE754			@ does the IEEE 754 conversion
+	ldr R9, =value2IEESplit @load result
 
+<<<<<<< HEAD
 	@split value up into different words
 	ldr R0, =value1IEEE754	@ loads IEE754 version
 	ldr R1, =value1IEESplit @load result
@@ -426,6 +469,9 @@ _start:
 	ldr R0, =value1IEESplit
 	ldr R1, =value2IEESplit
 	bl add_
+=======
+	bl getIEEE754			@ does the IEEE 754 conversion
+>>>>>>> ceb2f8a6636732b64e316ea4cca0275047b1aca8
 END:
 	swi SWI_Exit	@ exit program
 
