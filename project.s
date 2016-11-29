@@ -15,7 +15,7 @@
 		.asciz "-12.0"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "-39887.5625" 			@ second value (string)
+		.asciz "-25123.5625" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -92,12 +92,11 @@ splitIEE754:
 
 
 getIEEE754:
-	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, lr} @ stores registers on stack
+	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr} @ stores registers on stack
 	
 	ldr R4, [R1]		@ loads the answer's value into R4
 	ldr R2, [R0, #0]	@ loads the sign bit into R2
-	cmp R2, #1			@ do we have a negative number?
-	addeq R3, R4, #1	@ if so, make the first bit of the answer 1
+	str R2, [R9, #0]	@store sign bit in result bit
 
 	ldr R2, [R0, #4]	@ loads the whole number part into R2
 	cmp R2, #0			@ is our whole number part 0?
@@ -116,12 +115,12 @@ getIEEE754:
 		b findExponent		@ loops back
 
 	exponentInBin:
-		mov R3, R3, LSL #8	@ shifts the answer's bit 8 positions to the left
 		add R8, R8, #127	@ adds 127 to the exponent
-		add R3, R3, R8		@ adds the exponent onto the end of the sign bit
+		str R8, [R9, #4]
 
 	mantissaInBin:
 		sub R8, R8, #126	@ restores the original exponent plus one
+		mov R3, R2			@prep whole number
 		mov R3, R3, LSL R8	@ shifts the answer by the exponent plus one bits
 		add R3, R3, R2		@ adds the whole number part to end of the exponent
 		sub R8, R8, #1		@ restores the original exponent
@@ -164,8 +163,9 @@ getIEEE754:
 
 		@ NOTE: DOES NOT WORK YET
 		placeAndShift:
-			mov R3, R3, LSL R6	
+			mov R3, R3, LSL R6
 			add R3, R3, R2
+			str R3, [R9, #8]
 			sub R8, R8, R6
 			@mov R3, R3, LSL R8
 
@@ -173,7 +173,7 @@ getIEEE754:
 
 	finishIEEE754:
 		str R3, [R1]	@ stores the IEEE 754 number into memory
-		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, lr}	@ pops registers from stack
+		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
 
 
@@ -209,22 +209,16 @@ _start:
 	@ converts value 1 into IEEE 754
 	ldr R0, =value1Result	@ loads the parsed version of value 1 into R0
 	ldr R1, =value1IEEE754	@ loads the answer pointer into R1
+	ldr R9, =value1IEESplit @load result
+
 	bl getIEEE754			@ does the IEEE 754 conversion
 
 	@ converts value 1 into IEEE 754
 	ldr R0, =value2Result	@ loads the parsed version of value21 into R0
 	ldr R1, =value2IEEE754	@ loads the answer pointer into R1
+	ldr R9, =value2IEESplit @load result
+
 	bl getIEEE754			@ does the IEEE 754 conversion
-
-	@split value up into different words
-	ldr R0, =value1IEEE754	@ loads IEE754 version
-	ldr R1, =value1IEESplit @load result
-	bl splitIEE754
-
-	@split value up into different words
-	ldr R0, =value2IEEE754	@ loads IEE754 version
-	ldr R1, =value2IEESplit @load result
-	bl splitIEE754
 END:
 	swi SWI_Exit	@ exit program
 
