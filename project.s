@@ -701,8 +701,8 @@ END:
 	value2Result: .word 0, 0, 0	@ holds a parsed version of the second value
 	value1IEEE754: .word 0		@ holds value 1 in IEEE 754 form
 	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
-	value1IEESplit: .word 1, 128, 7340032   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
-	value2IEESplit: .word 0, 127, 0	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
+	value1IEESplit: .word 0, 129, 0   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
+	value2IEESplit: .word 1, 129, 6291456	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
 	sum1:			.word 0, 0, 0
 
 .end
