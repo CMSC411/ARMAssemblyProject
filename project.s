@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "-12.0"			@ first value (string)
+		.asciz "+7.0"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "-12.0" 			@ second value (string)
+		.asciz "+4.0" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -264,7 +264,7 @@ add_: @expects value1 in R0, value2 in R1, and result location in R2
 					b new_exp_f			@if still 0, jump to new_exp
 					
 				mant_sub_s:				@same as above bot second exp larger
-					sub R7, R5, R6
+					sub R7, R6, R5
 					mov R6, #31
 					mov R8, R7
 					mov R8, R8, LSR R6
@@ -499,7 +499,7 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 					b new_exp_f_		@if still 0, jump to new_exp
 					
 				mant_sub_s_:				@same as above bot second exp larger
-					sub R7, R5, R6
+					sub R7, R6, R5
 					mov R6, #31
 					mov R8, R7
 					mov R8, R8, LSR R6
@@ -659,20 +659,22 @@ multiply:
 	ldr R4, [R0, #8] @load mantisa value 1
 	ldr R5, [R1, #8] @load mantisa value 2
 
-	; mov R7, #1			@R7 used here to add 'assumed' 1 back to mantissa
-	; mov R7, R7, LSL #31
+	mov R7, #1			@R7 used here to add 'assumed' 1 back to mantissa
+	mov R7, R7, LSL #31
 
-	; mov R4, R4, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
-	; add R4, R4, R7		@add assumed 1
-	; mov R4, R4, LSR #1	@shift back right
-	; mov R5, R5, LSL #8	
-	; add R5, R5, R7
-	; mov R5, R5, LSR #8
+	mov R4, R4, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
+	add R4, R4, R7		@add assumed 1
+	mov R4, R4, LSR #9	@shift back right
+	mov R5, R5, LSL #8	
+	add R5, R5, R7
+	mov R5, R5, LSR #9
 
 	mov R7, R4 @result
 	mov R6, #1 @counter
 	mov R8, #8388608 @move min 24 bit value for comparison
 
+	
+	
 	addMantissa:
 		cmp   R7, R8 @is R7 greater than the max 23 bit value?
 		bgt overflown
@@ -685,12 +687,15 @@ multiply:
 	overflown:
 		cmp   R7, R8 @is R7 greater than the max 23 bit value?
 		movgt R7, R7, LSR #1
-		sub R3, R3, #1
+		movgt R4, R4, LSR #1 @added amount changes when shifting result?
+		; sub R3, R3, #1
 		bgt overflown
 		b addMantissa
 
 
 	endmul:
+		mov R7, R7, LSL #10
+		mov R7, R7, LSR #9
 		str R7, [R2, #8]	@store mantissa
 		ldmia sp!, {R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
@@ -745,6 +750,11 @@ _start:
 
 	ldr R0, =value1IEESplit
 	ldr R1, =value2IEESplit
+	ldr R2, =diff1
+	bl sub_
+
+	ldr R0, =value1IEESplit
+	ldr R1, =value2IEESplit
 	ldr R2, =product1
 	bl multiply
 
@@ -756,9 +766,10 @@ END:
 	value2Result: .word 0, 0, 0	@ holds a parsed version of the second value
 	value1IEEE754: .word 0		@ holds value 1 in IEEE 754 form
 	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
-	value1IEESplit: .word 1, 135, 16384   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
-	value2IEESplit: .word 0, 135, 16384	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
+	value1IEESplit: .word 0, 0, 0   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
+	value2IEESplit: .word 0, 0, 0	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
 	sum1:			.word 0, 0, 0
+	diff1:			.word 0, 0, 0
 	product1:		.word 0, 0, 0
 
 
