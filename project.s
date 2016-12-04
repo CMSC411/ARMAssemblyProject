@@ -699,7 +699,7 @@ multiply:
 
 	endmul:
 		mov R7, R7, LSL #2
-		; mov R7, R7, LSR #9
+		mov R7, R7, LSR #9
 		str R7, [R2, #8]	@store mantissa
 		ldmia sp!, {R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
@@ -749,18 +749,54 @@ _start:
 
 	ldr R0, =value1IEESplit
 	ldr R1, =value2IEESplit
-	ldr R2, =sum1
+	ldr R2, =sumSplit
 	bl add_
 
 	ldr R0, =value1IEESplit
 	ldr R1, =value2IEESplit
-	ldr R2, =diff1
+	ldr R2, =diffSplit
 	bl sub_
 
 	ldr R0, =value1IEESplit
 	ldr R1, =value2IEESplit
-	ldr R2, =product1
+	ldr R2, =productSplit
 	bl multiply
+
+	ldr R9, =sumSplit
+	ldr R1, =sumIEE754
+	bl IEEE754ThreeWordsToOne
+
+	ldr R9, =diffSplit
+	ldr R1, =diffIEE754
+	bl IEEE754ThreeWordsToOne
+
+	ldr R9, =productSplit
+	ldr R1, =productIEE754
+	bl IEEE754ThreeWordsToOne
+
+	ldr R0, =value1IEEE754	@load address of value1
+	ldr R1, =value2IEEE754	@load address of value2
+	ldr R0, [R0]	@load value of value1
+	ldr R1, [R1]	@load value of value1
+
+	ldr R3, =sumNative	@load address of add result
+	ldr R4, =diffNative	@load address of diff result
+	ldr R5, =productNative	@load address of product result
+
+
+	FMSR s0, r0 		;@ move floating point operand 1 into s0
+	FMSR s1, r1 		;@ move floating point operand 2 into s1
+	FADDS s2, s0, s1 	;@ perform floating point addition. store result into s2
+	FMRS r2, s2 		;@ move result back into r2
+	FSUBS s2, s0, s1 	;@ perform floating point subtraction. store result into s2
+	FMRS r6, s2 		;@ move result back into r6
+	FMULS s2, s0, s1 	;@ perform floating point multiply. store result into s2
+	FMRS r7, s2 		;@ move result back into r7
+
+	str R2, [R3]		@store addition result
+	str R6, [R4]		@store subtraction result
+	str R7, [R5]		@store multiplication result
+
 
 END:
 	swi SWI_Exit	@ exit program
@@ -768,13 +804,23 @@ END:
 .data
 	value1Result: .word 0, 0, 0	@ holds a parsed version of the first value
 	value2Result: .word 0, 0, 0	@ holds a parsed version of the second value
-	value1IEEE754: .word 0		@ holds value 1 in IEEE 754 form
-	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
+
 	value1IEESplit: .word 0, 0, 0   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
 	value2IEESplit: .word 0, 0, 0	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
-	sum1:			.word 0, 0, 0
-	diff1:			.word 0, 0, 0
-	product1:		.word 0, 0, 0
+	sumSplit: .word 0, 0, 0	@ holds sum in IEEE, but split into Sign, Exponent, and Mantissa
+	diffSplit: .word 0, 0, 0	@ holds diff in IEEE, but split into Sign, Exponent, and Mantissa
+	productSplit: .word 0, 0, 0	@ holds diff in IEEE, but split into Sign, Exponent, and Mantissa
+	
+	value1IEEE754: .word 0		@ holds value 1 in IEEE 754 form
+	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
 
+	sumIEE754: .word 0	@holds sum in IEE 754 Form
+	sumNative: .word 0	@holds result of native summation
 
+	diffIEE754: .word 0	@holds difference in IEE 754 Form
+	diffNative: .word 0	@holds result of native subtraction
+
+	productIEE754: .word 0	@holds product in IEE 754 Form
+	productNative: .word 0	@holds result of native multiplication
+	
 .end
