@@ -645,6 +645,61 @@ getIEEE754:
 		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
 
+multiply:
+	@@@GET SIGN BIT
+	stmdb sp!, {R3, R4, R5, R6, R7, R8, R9, lr} @store registers
+	ldr R3, [R0] @get sign of first value
+	ldr R4, [R1] @get sign of second value
+	eor R5, R3, R4	@should sign be 1 or 0?
+	str R5, [R2, #0] @store sign
+
+	@add exponents
+	ldr R3, [R0, #4] @load exponent of first value
+	ldr R4, [R1, #4] @load exponent of second value
+	add R3, R3, R4	 @sum the bits
+	sub R3, R3, #127 @subtract 127
+	str R3, [R2, #4] @add result
+
+
+	@determine mantissa
+	ldr R4, [R0, #8] @load mantisa value 1
+	ldr R5, [R1, #8] @load mantisa value 2
+
+	; mov R7, #1			@R7 used here to add 'assumed' 1 back to mantissa
+	; mov R7, R7, LSL #31
+
+	; mov R4, R4, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
+	; add R4, R4, R7		@add assumed 1
+	; mov R4, R4, LSR #1	@shift back right
+	; mov R5, R5, LSL #8	
+	; add R5, R5, R7
+	; mov R5, R5, LSR #8
+
+	mov R7, R4 @result
+	mov R6, #1 @counter
+	mov R8, #8388608 @move min 24 bit value for comparison
+
+	addMantissa:
+		cmp   R7, R8 @is R7 greater than the max 23 bit value?
+		bgt overflown
+		cmp R6, R5	@have we added R5 times yet?
+		addlt R7, R7, R4
+		addlt R6, R6, #1
+		blt addMantissa
+		b endmul
+
+	overflown:
+		cmp   R7, R8 @is R7 greater than the max 23 bit value?
+		movgt R7, R7, LSR #1
+		sub R3, R3, #1
+		bgt overflown
+		b addMantissa
+
+
+	endmul:
+		str R7, [R2, #8]	@store mantissa
+		ldmia sp!, {R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
+		bx lr 			@ return
 
 
 @ MAIN
@@ -693,6 +748,11 @@ _start:
 	ldr R2, =sum1
 	bl add_
 
+	ldr R0, =value1IEESplit
+	ldr R1, =value2IEESplit
+	ldr R2, =product1
+	bl multiply
+
 END:
 	swi SWI_Exit	@ exit program
 
@@ -701,8 +761,10 @@ END:
 	value2Result: .word 0, 0, 0	@ holds a parsed version of the second value
 	value1IEEE754: .word 0		@ holds value 1 in IEEE 754 form
 	value2IEEE754: .word 0		@ holds value 2 in IEEE 754 form
-	value1IEESplit: .word 0, 129, 0   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
-	value2IEESplit: .word 1, 129, 6291456	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
+	value1IEESplit: .word 1, 135, 16384   @ holds value 1 in IEEE, but split into Sign, Exponent, and Mantissa
+	value2IEESplit: .word 0, 135, 16384	@ holds value 2 in IEEE, but split into Sign, Exponent, and Mantissa
 	sum1:			.word 0, 0, 0
+	product1:		.word 0, 0, 0
+
 
 .end
