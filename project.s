@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "+7.0"			@ first value (string)
+		.asciz "+5.5"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "+4.0" 			@ second value (string)
+		.asciz "+5.5" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -667,38 +667,39 @@ multiply:
 
 	mov R4, R4, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
 	add R4, R4, R7		@add assumed 1
-	mov R4, R4, LSR #9	@shift back right
+	mov R4, R4, LSR #1	@shift back right
 	mov R5, R5, LSL #8	
 	add R5, R5, R7
 	mov R5, R5, LSR #9
 
 	mov R7, R4 @result
 	mov R6, #1 @counter
-	mov R8, #8388608 @move min 24 bit value for comparison
+	mov R8, #0 @move min 24 bit value for comparison
 
-	
+	mov R3, R7, LSR #31
 	
 	addMantissa:
-		cmp   R7, R8 @is R7 greater than the max 23 bit value?
+		cmp   R3, R8 @is R7 greater than the max 23 bit value?
 		bgt overflown
 		cmp R6, R5	@have we added R5 times yet?
 		addlt R7, R7, R4
 		addlt R6, R6, #1
+		mov R3, R7, LSR #31
 		blt addMantissa
 		b endmul
 
 	overflown:
-		cmp   R7, R8 @is R7 greater than the max 23 bit value?
+		cmp   R3, R8 @is R7 greater than the max 23 bit value?
 		movgt R7, R7, LSR #1
 		movgt R4, R4, LSR #1 @added amount changes when shifting result?
-		; sub R3, R3, #1
+		mov R3, #0
 		bgt overflown
 		b addMantissa
 
 
 	endmul:
-		mov R7, R7, LSL #10
-		mov R7, R7, LSR #9
+		mov R7, R7, LSL #2
+		; mov R7, R7, LSR #9
 		str R7, [R2, #8]	@store mantissa
 		ldmia sp!, {R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
