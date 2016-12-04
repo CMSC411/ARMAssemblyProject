@@ -562,22 +562,22 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 
 getIEEE754:
 	stmdb sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr} @ stores registers on stack
-	
-	ldr R4, [R1]		@ loads the answer's value into R4
+
 	ldr R2, [R0, #0]	@ loads the sign bit into R2
-	str R2, [R9, #0]	@store sign bit in result bit
+	str R2, [R9, #0]	@ store sign bit in first word of split answer
 
 	ldr R2, [R0, #4]	@ loads the whole number part into R2
-	cmp R2, #0			@ is our whole number part 0?
+	cmp R2, #1			@ is our whole number part 1?
 	moveq R8, #0		@ if so, make our exponent answer 0
+	moveq R5, #2		@ sets R5 to 2 so that the mantissa part works correctly
 	beq exponentInBin	@ also if so, jump to the exponent conversion
 
 	mov R5, #2 			@ our 2^(R8+1) number
 	mov R6, #2			@ stays 2 to multiply R6 by 2 each iteration
 	mov R8, #0			@ our exponent answer
 	findExponent:	
-		cmp R2, R5			@ is our whole number <= the current 2^(R8+1)? 
-		ble exponentInBin 	@ if so, proceed to exponent conversion
+		cmp R2, R5			@ is our whole number < the current 2^(R8+1)? 
+		blt exponentInBin 	@ if so, proceed to exponent conversion
 		add R8, R8, #1		@ otherwise, adds one to our exponent
 		mul R7, R5, R6		@ and multiplies our 2^x number by 2
 		mov R5, R7			@ and moves the answer into the correct spot
@@ -585,15 +585,14 @@ getIEEE754:
 
 	exponentInBin:
 		add R8, R8, #127	@ adds 127 to the exponent
-		str R8, [R9, #4]
+		str R8, [R9, #4]	@ stores the exponent in the second word of the split answer
+		sub R8, R8, #127	@ restores the original exponent
 
 	mantissaInBin:
-		sub R8, R8, #126	@ restores the original exponent plus one
-		mov R3, R2			@prep whole number
-		mov R3, R3, LSL R8	@ shifts the answer by the exponent plus one bits
-		add R3, R3, R2		@ adds the whole number part to end of the exponent
-		sub R8, R8, #1		@ restores the original exponent
-		rsb R8, R8, #23     	@ finds how much space we have for the decimal
+		mov R5, R5, LSR #1	@ divides our 2^(R8+1) number by 2
+		sub R2, R2, R5		@ takes the previous number off of our whole number in order to remove the leading 1 bit
+		mov R3, R2			@ place whole number in where the mantissa will be
+		rsb R8, R8, #23     @ finds how much space we have for the decimal
 
 		mov R4, #1			@ our iterator
 		mov R6, #0			@ count for how many base 10 digits our number is
@@ -605,45 +604,40 @@ getIEEE754:
 			addgt R6, R6, #1	@ add one to the count
 			movgt R4, R5		@ move the product into R4 to start again
 			bgt digitCount 		@ loops back
-		sub R8, R8, #1			@ makes R8 the number of 2 multiplications we need
-		mov R2, R2, LSL R8		@ multiplies our fraction part by 2^R8
-		add R8, R8, #1			@ adds back the one we just subtracted for later
-		ldr R4, =0x1999999A		@ magic number for dividing by 10 bitwise
-		divideByTens:
-			cmp R6, #0 				@ do we still have to divide by 10?
-			umullne R5, R7, R2, R4	@ if so, long multiplies our R2 by R4
-			subne R6, R6, #1	@ also, subtracts one from the times we need to divide by 10
-			movne R2, R7			@ moves the product into R2 for the loop
-			bne divideByTens 		@ loops back
 
-		mov R4, #1				@ our iterator
-		mov R6, #0				@ counts how many binary digits our number is
-		mov R7, #2				@ stays as 2 to multiply by R4 each iteration
-		digitCountBin:
-			cmp R2, R4			@ is our number greater than 2^R4?
-			mulgt R5, R4, R7	@ if so, multiply by 2
-			addgt R6, R6, #1    	@ also, add one to the count
-			movgt R4, R5		@ moves the product back into R4 for looping
-			bgt digitCountBin	@ loops back
-
-		cmp R6, R8			@ do we have room for our decimal result?
-		ble placeAndShift		@ if so, place it and shift over the rest
-		bgt shiftAndPlace 		@ if not, truncate the number and place it
-
-		@ NOTE: DOES NOT WORK YET
-		placeAndShift:
-			mov R3, R3, LSL R6
-			add R3, R3, R2
-			str R3, [R9, #8]
-			sub R8, R8, R6
-			@mov R3, R3, LSL R8
-
-		shiftAndPlace:
+		convertFraction:
+			cmp R8, #0				@ are we done looping
+			beq finishIEEE754		@ if so, exit loop
+			mov R2, R2, LSL #1		@ multiply our fraction number by 2
+			cmp R2, R4				@ have we overflowed into a new decimal digit?
+			subgt R2, R2, R4		@ if so, subtract off that digit
+			movgt R3, R3, LSL #1	@ also, shift over the mantissa
+			addgt R3, R3, #1		@ also, add one to the mantissa
+			subgt R8, R8, #1		@ also, take one from the loop counter
+			bgt convertFraction		@ also, loop back
+			movlt R3, R3, LSL #1	@ if not, shift over the mantissa
+			sublt R8, R8, #1		@ also, take one from the loop counter
+			blt convertFraction		@ also, loop back
+			moveq R3, R3, LSL R8	@ if we equaled "1" perse, we need to fill the rest of the mantissa with 0's
+			beq finishIEEE754		@ skip to the end
 
 	finishIEEE754:
-		str R3, [R1]	@ stores the IEEE 754 number into memory
+		str R3, [R9, #8]	@ stores the mantissa into the split answer
 		ldmia sp!, {R2, R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 			@ return
+
+IEEE754ThreeWordsToOne:
+	stmdb sp!, {R0, R2, lr} @ stores registers on stack
+	ldr R0, [R9, #0]		@ place the sign bit in the register
+	mov R0, R0, LSL #8		@ move over 8 bits for the exponent
+	ldr R2, [R9, #4]		@ load the exponent into R2
+	add R0, R0, R2			@ place the exponent in the register
+	mov R0, R0, LSL #23		@ move over 23 bits for the mantissa
+	ldr R2, [R9, #8]		@ load the mantissa into R2
+	add R0, R0, R2			@ place the mantissa in the register
+	str R0, [R1]			@ store the IEEE 754 number in the word
+	ldmia sp!, {R0, R2, lr}	@ pops registers from stack
+	bx lr 
 
 multiply:
 	@@@GET SIGN BIT
@@ -730,18 +724,19 @@ _start:
 	bl getDecimal			@ gets the decimal part
 	bl getWhole				@ gets the whole part
 
-	; @ converts value 1 into IEEE 754
-	; ldr R0, =value1Result	@ loads the parsed version of value 1 into R0
-	; ldr R1, =value1IEEE754	@ loads the answer pointer into R1
-	; ldr R9, =value1IEESplit @load result
+	@ converts value 1 into IEEE 754
+	ldr R0, =value1Result	@ loads the parsed version of value 1 into R0
+	ldr R1, =value1IEEE754	@ loads the answer pointer into R1
+	ldr R9, =value1IEESplit @ load result
+	bl getIEEE754			@ does the IEEE 754 conversion
+	bl IEEE754ThreeWordsToOne	@ puts the IEEE 754 number in one word
 
-	; bl getIEEE754			@ does the IEEE 754 conversion
-
-	; @ converts value 1 into IEEE 754
-	; ldr R0, =value2Result	@ loads the parsed version of value21 into R0
-	; ldr R1, =value2IEEE754	@ loads the answer pointer into R1
-	; ldr R9, =value2IEESplit @load result
-	; bl getIEEE754			@ does the IEEE 754 conversion
+	@ converts value 2 into IEEE 754
+	ldr R0, =value2Result	@ loads the parsed version of value 2 into R0
+	ldr R1, =value2IEEE754	@ loads the answer pointer into R1
+	ldr R9, =value2IEESplit @ load result
+	bl getIEEE754			@ does the IEEE 754 conversion
+	bl IEEE754ThreeWordsToOne	@ puts the IEEE 754 number in one word
 
 	ldr R0, =value1IEESplit
 	ldr R1, =value2IEESplit
