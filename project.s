@@ -600,10 +600,10 @@ getIEEE754:
 		ldr R2, [R0, #8]	@ loads the decimal part into R2
 		digitCount:
 			cmp R2, R4			@ is our decimal part greater than 10^R4?
-			mulgt R5, R4, R7	@ if so, multiply R4 by 10
-			addgt R6, R6, #1	@ add one to the count
-			movgt R4, R5		@ move the product into R4 to start again
-			bgt digitCount 		@ loops back
+			mulge R5, R4, R7	@ if so, multiply R4 by 10
+			addge R6, R6, #1	@ add one to the count
+			movge R4, R5		@ move the product into R4 to start again
+			bge digitCount 		@ loops back
 
 		convertFraction:
 			cmp R8, #0				@ are we done looping
