@@ -618,8 +618,11 @@ getIEEE754:
 			movlt R3, R3, LSL #1	@ if not, shift over the mantissa
 			sublt R8, R8, #1		@ also, take one from the loop counter
 			blt convertFraction		@ also, loop back
-			moveq R3, R3, LSL R8	@ if we equaled "1" perse, we need to fill the rest of the mantissa with 0's
-			beq finishIEEE754		@ skip to the end
+			moveq R3, R3, LSL #1	@ if we equaled "1" per se, shift left one
+			addeq R3, R3, #1		@ also, add one to the mantissa
+			subeq R8, R8, #1		@ also, subtract one from the loop count
+			moveq R3, R3, LSL R8	@ also, fill the rest of the mantissa with 0's
+			beq finishIEEE754		@ also, skip to the end
 
 	finishIEEE754:
 		str R3, [R9, #8]	@ stores the mantissa into the split answer
