@@ -675,27 +675,27 @@ multiply:
 	mov R7, R4 @result
 	mov R6, #1 @counter
 	mov R8, #0 @move min 24 bit value for comparison
-
 	mov R3, R7, LSR #31
 	
 	addMantissa:
-		cmp   R3, R8 @is R7 greater than the max 23 bit value?
-		bgt overflown
 		cmp R6, R5	@have we added R5 times yet?
-		addlt R7, R7, R4
-		addlt R6, R6, #1
-		mov R3, R7, LSR #31
-		blt addMantissa
-		b endmul
+		blt addFractions
+		b endmul @finish
 
-	overflown:
-		cmp   R3, R8 @is R7 greater than the max 23 bit value?
-		movgt R7, R7, LSR #1
-		movgt R4, R4, LSR #1 @added amount changes when shifting result?
-		mov R3, #0
-		bgt overflown
+	addFractions:
+		adds R7, R7, R4	@set overflow flag so we know if we need to handle overflow
+		add R6, R6, #1
+		mov R3, R7, LSR #31
+		bvs overflown @if overflow flag is set handle it.
 		b addMantissa
 
+	overflown:
+		mov R3, R7, LSR #30
+		mov R7, R7, LSR #1 
+		mov R4, R4, LSR #1 @added amount changes when shifting result?
+		mov R3, #0
+		cmp R9, #1
+		b addMantissa
 
 	endmul:
 		mov R7, R7, LSL #2
