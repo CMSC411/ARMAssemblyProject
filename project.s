@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "+5.5"			@ first value (string)
+		.asciz "-3.3"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "+5.5" 			@ second value (string)
+		.asciz "+200.0" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -655,12 +655,17 @@ multiply:
 	ldr R4, [R1, #4] @load exponent of second value
 	add R3, R3, R4	 @sum the bits
 	sub R3, R3, #127 @subtract 127
-	str R3, [R2, #4] @add result
 
 
 	@determine mantissa
 	ldr R4, [R0, #8] @load mantisa value 1
 	ldr R5, [R1, #8] @load mantisa value 2
+
+	mov R6, #8388608 @load magic overflow number
+	add R7, R4, R5	@add 2 values
+	cmp R7, r6      @are the two values combined greater than our overflow indicator?
+	addge R3, R3, #1 @if so, increment exponent
+	str R3, [R2, #4] @store exponent
 
 	mov R7, #1			@R7 used here to add 'assumed' 1 back to mantissa
 	mov R7, R7, LSL #31
@@ -668,14 +673,14 @@ multiply:
 	mov R4, R4, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
 	add R4, R4, R7		@add assumed 1
 	mov R4, R4, LSR #1	@shift back right
-	mov R5, R5, LSL #8	
-	add R5, R5, R7
-	mov R5, R5, LSR #9
+
+	mov R5, R5, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
+	add R5, R5, R7      @add assumed 1
+	mov R5, R5, LSR #9	@shift back right
 
 	mov R7, R4 @result
 	mov R6, #1 @counter
 	mov R8, #0 @move min 24 bit value for comparison
-	mov R3, R7, LSR #31
 	
 	addMantissa:
 		cmp R6, R5	@have we added R5 times yet?
@@ -685,24 +690,21 @@ multiply:
 	addFractions:
 		adds R7, R7, R4	@set overflow flag so we know if we need to handle overflow
 		add R6, R6, #1
-		mov R3, R7, LSR #31
 		bvs overflown @if overflow flag is set handle it.
 		b addMantissa
 
 	overflown:
-		mov R3, R7, LSR #30
 		mov R7, R7, LSR #1 
 		mov R4, R4, LSR #1 @added amount changes when shifting result?
-		mov R3, #0
 		cmp R9, #1
 		b addMantissa
 
 	endmul:
-		mov R7, R7, LSL #2
-		mov R7, R7, LSR #9
+		mov R7, R7, LSL #2	@shift out our assumed 1
+		mov R7, R7, LSR #9 	@shift over back to mantissa slot
 		str R7, [R2, #8]	@store mantissa
 		ldmia sp!, {R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
-		bx lr 			@ return
+		bx lr 	@ return
 
 
 @ MAIN
