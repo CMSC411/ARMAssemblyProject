@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "-3.3"			@ first value (string)
+		.asciz "+4.53"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "+200.0" 			@ second value (string)
+		.asciz "+2.643" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -35,22 +35,22 @@ getDecimal:
 	mov R7,	#10	@ just a constant		
 	mov R5, #0	@ value to put in memory
 
-startDecimal:
-	ldrb R8, [R0, R2]	@ get ith bit in string
-	cmp R8, #46         @ is it the decimal point?
-	beq endDecimal      @ end
-	sub R4, R8, #48		@ subtract 48 from ascii value to get int value
-	mul R6, R3, R4		@ base 10 * value of digit
-	add R5, R5, R6		@ add result
-	mul R3, R7, R3		@ increment base 10 counter
-	sub R2, R2, #1		@ increment source by 1			
-	b startDecimal 		@ loops back
+	startDecimal:
+		ldrb R8, [R0, R2]	@ get ith bit in string
+		cmp R8, #46         @ is it the decimal point?
+		beq endDecimal      @ end
+		sub R4, R8, #48		@ subtract 48 from ascii value to get int value
+		mul R6, R3, R4		@ base 10 * value of digit
+		add R5, R5, R6		@ add result
+		mul R3, R7, R3		@ increment base 10 counter
+		sub R2, R2, #1		@ increment source by 1			
+		b startDecimal 		@ loops back
 
-endDecimal:
-	str R5, [R1, #8]	@ store result
-	sub R2, R2, #1		@ subtract 
-	ldmia sp!, {R3, R4, R5, R6, lr}		@ pop the registers we used
-	bx lr 	@ return			
+	endDecimal:
+		str R5, [R1, #8]	@ store result
+		sub R2, R2, #1		@ subtract 
+		ldmia sp!, {R3, R4, R5, R6, lr}		@ pop the registers we used
+		bx lr 	@ return			
 
 getWhole:
 	stmdb sp!, {R3, R4, R5, R6, lr}	@ store what we use on the stack	
@@ -58,21 +58,21 @@ getWhole:
 	mov R7,	#10	@ just a constant		
 	mov R5, #0	@ value to put in memory
 
-startWhole:
-	ldrb R8, [R0, R2]	@ get ith bit in string
-	cmp R2, #0			@ is it the decimal point?
-	beq endWhole      	@ end
-	sub R4, R8, #48		@ subtract 48 from ascii value to get int value
-	mul R6, R3, R4		@ base 10 * value of digit
-	add R5, R5, R6		@ add result
-	mul R3, R7, R3		@ increment base 10 counter
-	sub R2, R2, #1		@ increment source by 1			
-	b startWhole		@ loops back
+	startWhole:
+		ldrb R8, [R0, R2]	@ get ith bit in string
+		cmp R2, #0			@ is it the decimal point?
+		beq endWhole      	@ end
+		sub R4, R8, #48		@ subtract 48 from ascii value to get int value
+		mul R6, R3, R4		@ base 10 * value of digit
+		add R5, R5, R6		@ add result
+		mul R3, R7, R3		@ increment base 10 counter
+		sub R2, R2, #1		@ increment source by 1			
+		b startWhole		@ loops back
 
-endWhole:
-	str R5, [R1, #4]	@ store result
-	ldmia sp!, {R3, R4, R5, R6, lr}	@ pop the registers we used
-	bx lr 	@ return
+	endWhole:
+		str R5, [R1, #4]	@ store result
+		ldmia sp!, {R3, R4, R5, R6, lr}	@ pop the registers we used
+		bx lr 	@ return
 
 splitIEE754:
 	stmdb sp!, {R3, R4, R5, lr} @store registers
@@ -656,53 +656,40 @@ multiply:
 	add R3, R3, R4	 @sum the bits
 	sub R3, R3, #127 @subtract 127
 
-
 	@determine mantissa
 	ldr R4, [R0, #8] @load mantisa value 1
 	ldr R5, [R1, #8] @load mantisa value 2
-
-	mov R6, #8388608 @load magic overflow number
-	add R7, R4, R5	@add 2 values
-	cmp R7, r6      @are the two values combined greater than our overflow indicator?
-	addge R3, R3, #1 @if so, increment exponent
-	str R3, [R2, #4] @store exponent
 
 	mov R7, #1			@R7 used here to add 'assumed' 1 back to mantissa
 	mov R7, R7, LSL #31
 
 	mov R4, R4, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
 	add R4, R4, R7		@add assumed 1
-	mov R4, R4, LSR #1	@shift back right
+	mov R4, R4, LSR #9	@shift back right
 
 	mov R5, R5, LSL #8	@shift left 8, leaving a space for the 'assumed' 1
 	add R5, R5, R7      @add assumed 1
 	mov R5, R5, LSR #9	@shift back right
 
-	mov R7, R4 @result
-	mov R6, #1 @counter
-	mov R8, #0 @move min 24 bit value for comparison
-	
+	mov R9, #0	@result
 	addMantissa:
-		cmp R6, R5	@have we added R5 times yet?
-		blt addFractions
-		b endmul @finish
-
-	addFractions:
-		adds R7, R7, R4	@set overflow flag so we know if we need to handle overflow
-		add R6, R6, #1
-		bvs overflown @if overflow flag is set handle it.
-		b addMantissa
-
-	overflown:
-		mov R7, R7, LSR #1 
-		mov R4, R4, LSR #1 @added amount changes when shifting result?
-		cmp R9, #1
-		b addMantissa
+		mov R6, R4, LSL #31 @check lsb of value2
+		cmp R6, #0 @is it zero or one?
+		addne R9, R9, R5	@add by value1
+		mov R4, R4, LSR #1	@shift value
+		mov R9, R9, LSR #1	@shift result
+		cmp R4, #0 @have we shifted out all of value2
+		bne addMantissa
 
 	endmul:
-		mov R7, R7, LSL #2	@shift out our assumed 1
-		mov R7, R7, LSR #9 	@shift over back to mantissa slot
-		str R7, [R2, #8]	@store mantissa
+		mov R6, #4194304 @load max 23 bit number
+		cmp R9, R6 @is our number greater?
+		addgt R3, R3, #1 @need to increment exponent
+		movgt R9, R9, LSR #1 @shift right so we're not overflowing
+		mov R9, R9, LSL #11 @kill sign bit
+		mov R9, R9, LSR #9 @shift back into place
+		str R3, [R2, #4] @store exponent
+		str R9, [R2, #8]	@store mantissa
 		ldmia sp!, {R3, R4, R5, R6, R7, R8, R9, lr}	@ pops registers from stack
 		bx lr 	@ return
 
