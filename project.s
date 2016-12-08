@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "+1000.0"			@ first value (string)
+		.asciz "-1.2"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "+3000.2" 			@ second value (string)
+		.asciz "+1.9" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -236,12 +236,13 @@ add_: @expects value1 in R0, value2 in R1, and result location in R2
 				mov R6, R6, LSL #8	
 				add R6, R6, R7
 
-				cmp R4, R3				@if exponents are equal
-				beq mant_sub_f
-
 				cmp R4, R3				@if second exponent is larger
 				bhi second_exp_larger
-				b first_exp_larger		@if first exponent is larger
+				blt first_exp_larger		@if first exponent is larger
+				
+				cmp R5, R6
+				bhi mant_sub_f
+				b mant_sub_s
 				
 				first_exp_larger:
 					sub R7, R3, R4		@calculate shift
@@ -325,6 +326,8 @@ add_: @expects value1 in R0, value2 in R1, and result location in R2
 					beq end_zero
 					b new_exp_s			@if R6 not 0 keep looping
 
+
+		
 sub_: @expects value1 in R0, value2 in R1, and result location in R2
 	stmdb sp!, {R3, R4, R5, R6, R7, R8, R9, lr} @store registers
 	
@@ -475,12 +478,14 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 				mov R6, R6, LSL #8	
 				add R6, R6, R7
 
-				cmp R4, R3				@if exponents are equal
-				beq mant_sub_f_
-
 				cmp R4, R3				@if second exponent is larger
 				bhi second_exp_larger_
-				b first_exp_larger_		@if first exponent is larger
+				blt first_exp_larger_		@if first exponent is larger
+				
+				cmp R5, R6
+				bhi mant_sub_f_
+				b mant_sub_s_
+
 				
 				first_exp_larger_:
 					sub R7, R3, R4		@calculate shift
