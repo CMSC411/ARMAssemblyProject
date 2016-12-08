@@ -12,10 +12,10 @@
 @ INPUT VALUES
 .text
 	value1: 
-		.asciz "+4.53"			@ first value (string)
+		.asciz "+1000.0"			@ first value (string)
 		.set value1_size, .-value1 	@ size of first value
 	value2: 
-		.asciz "+2.643" 			@ second value (string)
+		.asciz "+3000.2" 			@ second value (string)
 		.set value2_size, .-value2 	@ size of second value
 
 @ FUNCTIONS
@@ -405,6 +405,8 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 			mov R9, #8			@load in mantissas
 			ldr R7, [R0, R9]
 			ldr R8, [R1, R9]
+			
+			mov R9, #0			
 
 			cmp R5, R6					@compare exponents
 			beq check_mant_first_		@if exponents equal, check mantissas
@@ -423,7 +425,7 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 				b continue_
 
 			pos_result_first_:
-				str R4, [R2]			@store positive
+				str R9, [R2]			@store positive
 				b continue_
 
 		second_neg_:				@second value is negative
@@ -434,6 +436,8 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 			mov R9, #8			@load in mantissas
 			ldr R7, [R0, R9]
 			ldr R8, [R1, R9]
+			
+			mov R9, #1
 
 			cmp R5, R6					@compare exponents
 			beq check_mant_second_		@if exponents equal, check mantissas
@@ -448,7 +452,7 @@ sub_: @expects value1 in R0, value2 in R1, and result location in R2
 				b neg_result_second_		@if negative value is higher
 
 			neg_result_second_: 
-				str R4, [R2]			@store negative
+				str R9, [R2]			@store negative
 				b continue_
 
 			pos_result_second_:
